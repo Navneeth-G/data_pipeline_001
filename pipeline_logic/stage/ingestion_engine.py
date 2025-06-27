@@ -151,7 +151,7 @@ class ElasticsearchToS3Ingester:
                                 timestamp_field_name: {
                                     "gte": query_start_ts_str,
                                     "lt": query_end_ts_str,
-                                    "time_zone": 'PST8PDT'
+                                    "time_zone": self.config.get('es_timezone', 'PST8PDT')
                                 }
                             }
                         }
@@ -179,3 +179,63 @@ class ElasticsearchToS3Ingester:
             "elasticdump",
             f"--input={index_host_url}",
             f"--output={output_s3_path}",
+            "--use-ssl=true",
+            "--tlsAuth",
+            f"--headers={json.dumps(headers)}",
+            f"--input-ca={input_ca}",
+            "--type=data",
+            f"--searchBody={json.dumps(search_body)}",
+            f"--s3AccessKeyId={aws_access_key}",
+            f"--s3SecretAccessKey={aws_secret_key}",
+            "--retryAttempts=3",
+            "--retryDelay=60000",
+            f"--limit={limit}",
+            f"--fileSize={file_size}mb",
+            f"--timeout={timeout}"
+        ]
+        
+        log.info(
+            f"Executing elasticdump command",
+            log_key="Elasticdump Command",
+            status="STARTED",
+            command_preview=f"elasticdump --input={index_host_url} --output={output_s3_path}",
+            file_size_mb=file_size,
+            limit=limit,
+            timeout=timeout
+        )
+        
+        try:
+            result = subprocess.run(bash_command, check=True, capture_output=True, text=True)
+            
+            log.info(
+                f"Elasticdump command completed successfully",
+                log_key="Elasticdump Command",
+                status="SUCCESS",
+                stdout_preview=result.stdout[:500] if result.stdout else "No output"
+            )
+            
+        except subprocess.CalledProcessError as e:
+            log.error(
+                f"Elasticdump command failed",
+                log_key="Elasticdump Command",
+                status="FAILED",
+                return_code=e.returncode,
+                stderr=e.stderr[:500] if e.stderr else "No error output",
+                stdout=e.stdout[:500] if e.stdout else "No output"
+            )
+            raise Exception(f"Elasticdump failed with return code {e.returncode}: {e.stderr}")
+        
+        except Exception as e:
+            log.error(
+                f"Elasticdump execution error",
+                log_key="Elasticdump Command",
+                status="ERROR",
+                error_message=str(e)
+            )
+            raise
+
+# Standalone function for import compatibility
+def ingest_source_to_stage(config: Dict[str, Any], source_query_window_start_time, source_query_window_end_time) -> Dict[str, Any]:
+    """Standalone function for source to stage ingestion"""
+    ingester = ElasticsearchToS3Ingester(config)
+    return ingester.execute_ingestion(source_query_window_start_time, source_query_window_end_time)
