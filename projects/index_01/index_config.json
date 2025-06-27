@@ -27,7 +27,7 @@
   "bucket_name": "{env}-data-bucket",
   "s3_prefix": "logs/{env}/{index_group}/{index_name}/",
 
-  "file_prefix": "{index_name}_{timestamp}",
+  "file_prefix": "{index_name}",
   "region": "us-west-1",
   "elasticdump_options": "--size=10000 --limit=250",
   "target_database": "{env}_{index_group}_{index_name}_db",
